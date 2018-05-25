@@ -34,8 +34,13 @@ int fct_check_parameter(int argc, char *argv[]){
 
 //Funktion checkt ob Semaphore bereits angelegt sind oder ob diese erst angelegt werden müssen.
 
-sem_t *fct_sem_open_create(char *sem_name, int sem_size){
-    sem_t *sem_pointer = NULL;
+sem_t *fct_sem_open_create(const char *sem_name, int sem_size){
+
+    sem_t *sem_pointer;
+    long i=strlen(sem_name);
+
+    char test[20];
+    strcpy(test,sem_name);
 
     sem_pointer = sem_open(sem_name,0);
     if(sem_pointer == SEM_FAILED){
@@ -54,4 +59,65 @@ sem_t *fct_sem_open_create(char *sem_name, int sem_size){
         printf("\nSemaphore waren bereits erzeugt");
     }
 }
+int create_shared_mem( char* name,int memsize){
 
+    int shm_fd=0;
+    int name_length=0;
+//öffnen des Shared Memory Bereichs falls vorhanden
+    name_length=strlen(name);
+    name[name_length]='\0';
+    shm_fd = shm_open(name,O_RDONLY|O_WRONLY,S_IRWXU);
+    if(shm_fd == -1){
+        //Erzeugen des Shared Memory falls noch nicht vorhanden
+        //name, flags, mode, init value
+        shm_fd = shm_open(name,O_CREAT|O_EXCL|O_RDWR,S_IRWXU);
+        if(shm_fd == -1){
+            printf("\nFehler Shared Memory open");
+            exit(EXIT_FAILURE);
+        }
+        else{
+            printf("\nErzeugung Shared Memory erfolgreich");
+        }
+    }
+    else{
+        printf("\nShared Memory war bereits erzeugt");
+    }
+
+
+
+    //Größe bestimmen, hierfür muss das SHM schreibend geöffnet werden.
+    if(ftruncate(shm_fd, sizeof(int)*memsize)==-1){
+        printf("\nFehler beim Festlegen der Groesse des SHM");
+    }
+    else{
+        printf("\nGroesse wurde erfolgreich festgelegt");
+    }
+
+
+
+
+
+}
+
+char* create_sem_name(int identity){
+
+    char shm_name[20];
+
+    char shm_basic[40] = "/shm_";
+    char sem_basic[40] = "/sem_";
+
+
+
+    snprintf(shm_name,20,"%d",CAL_SHM_ID(getuid(),0));
+
+    if(identity==1) {
+        strcat(shm_name,"\0");
+        return strcat(sem_basic, shm_name);
+
+
+
+    }else if(identity==2){
+        return strcat(shm_basic, shm_name);
+    }
+
+}
