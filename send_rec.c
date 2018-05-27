@@ -6,6 +6,7 @@
 // C File for all functions we are using in sender.c and receiver.c
 int ringbuffer = 0;
 
+
 //Parameter werden überprüft und Ringpuffer Größe zurückgegeben.
 
 int fct_check_parameter(int argc, char *argv[]){
@@ -32,15 +33,29 @@ int fct_check_parameter(int argc, char *argv[]){
     return ringbuffer;
 }
 
+void fct_create_name(char *name, int identity){
+
+    char shm_name[20];
+
+    char shm_basic[40] = "/shm_";
+    char sem_basic[40] = "/sem_";
+
+    snprintf(shm_name,20,"%d",CAL_SHM_ID(getuid(),0));
+
+    if(identity==1) {
+        strcat(sem_basic, shm_name);
+        strcpy(name,sem_basic);
+    }else if(identity==2){
+        strcat(shm_basic, shm_name);
+        strcpy(name,shm_basic);
+    }
+}
+
 //Funktion checkt ob Semaphore bereits angelegt sind oder ob diese erst angelegt werden müssen.
 
 sem_t *fct_sem_open_create(const char *sem_name, int sem_size){
 
-    sem_t *sem_pointer;
-    long i=strlen(sem_name);
-
-    char test[20];
-    strcpy(test,sem_name);
+    sem_t *sem_pointer = NULL;
 
     sem_pointer = sem_open(sem_name,0);
     if(sem_pointer == SEM_FAILED){
@@ -58,14 +73,73 @@ sem_t *fct_sem_open_create(const char *sem_name, int sem_size){
     else{
         printf("\nSemaphore waren bereits erzeugt");
     }
+    return sem_pointer;
 }
-int create_shared_mem( char* name,int memsize){
 
-    int shm_fd=0;
-    int name_length=0;
+int fct_edit_sem(char option, sem_t *sem_pointer){
+    int sem_value = 0;
+    switch (option) {
+        case 'd': //dekrementieren
+            //sem_wait return 0 --> Sucess
+            if(!sem_wait(sem_pointer)){
+                printf("\nErfolgreich dekrementiert: %p", sem_pointer);
+            } else{
+                printf("\nFehler dekrementieren");
+                return 1;
+            }
+            break;
+        case 'i': //inkrementieren sem
+            //sem_post return 0 --> Sucess
+            if(!sem_post(sem_pointer)){
+                printf("\nErfolgreich inkrementiert: %p", sem_pointer);
+            } else{
+                printf("\nFehler inkrementieren");
+                return 1;
+            }
+            break;
+        case 's': //show
+            if(sem_getvalue(sem_pointer,&sem_value)==-1){
+                printf("\nFehler Semaphore Wert holen");
+                return 1;
+            }
+            else{
+                printf("\nAktueller Semaphor Wert = %i",sem_value);
+            }
+            break;
+        default:
+            printf("\nUngueltige Option wurde uebergeben!");
+            return 1;
+            break;
+    }
+    return 0;
+}
+
+int fct_close_unlink_sem(char *name, sem_t *sem_pointer){
+
+    //schließen Semaphore
+    if(sem_close(sem_pointer)==-1){
+        printf("\nFehler schließen");
+        return 1;
+    } else{
+        printf("\nErfolgreich geschlossen");
+    }
+
+    //freigeben Semaphore
+    if(sem_unlink(name)==-1){
+        printf("\nFehler freigeben");
+        return 1;
+    } else{
+        printf("\nErfolgreich freigegeben");
+    }
+    return 0;
+}
+
+
+int fct_create_shared_mem(char* name,int memsize){
+
+    int shm_fd=-2;
 //öffnen des Shared Memory Bereichs falls vorhanden
-    name_length=strlen(name);
-    name[name_length]='\0';
+
     shm_fd = shm_open(name,O_RDONLY|O_WRONLY,S_IRWXU);
     if(shm_fd == -1){
         //Erzeugen des Shared Memory falls noch nicht vorhanden
@@ -83,8 +157,6 @@ int create_shared_mem( char* name,int memsize){
         printf("\nShared Memory war bereits erzeugt");
     }
 
-
-
     //Größe bestimmen, hierfür muss das SHM schreibend geöffnet werden.
     if(ftruncate(shm_fd, sizeof(int)*memsize)==-1){
         printf("\nFehler beim Festlegen der Groesse des SHM");
@@ -92,32 +164,56 @@ int create_shared_mem( char* name,int memsize){
     else{
         printf("\nGroesse wurde erfolgreich festgelegt");
     }
-
-
-
-
-
+    return shm_fd;
 }
 
-char* create_sem_name(int identity){
+int *fct_map_shm(int shm_fd, int memsize){
+    int *shm_pointer = NULL;
+    shm_pointer = mmap(NULL, (sizeof(int)*memsize), PROT_READ|PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    if(shm_pointer == (int *)MAP_FAILED){
+        printf("\nEinblenden des SHM fehlerhaft");
+        printf("\nERRRNO: %s", strerror(errno));
+        return NULL;
+    }
+    else{
+        printf("\nEinblenden des SHM erfolgreich");
+    }
+    return shm_pointer;
+}
 
-    char shm_name[20];
+int fct_unmap_shm(int *p_shm, int memsize){
+    //Ausblenden des Bereiches
+    if(munmap(p_shm, (sizeof(int)*memsize)) == -1){
+        printf("\nAusblenden des SHM fehlerhaft");
+        printf("\nERRRNO: %s", strerror(errno));
+        return 1;
+    }
+    else {
+        printf("\nAusblenden des SHM erfolgreich");
+    }
+    return 0;
+}
 
-    char shm_basic[40] = "/shm_";
-    char sem_basic[40] = "/sem_";
-
-
-
-    snprintf(shm_name,20,"%d",CAL_SHM_ID(getuid(),0));
-
-    if(identity==1) {
-        strcat(shm_name,"\0");
-        return strcat(sem_basic, shm_name);
-
-
-
-    }else if(identity==2){
-        return strcat(shm_basic, shm_name);
+int fct_close_unlink_shm (char *name, int shm_fd){
+    //Schließen Filedeskriptor
+    if(close(shm_fd)==-1){
+        printf("\nSchließen des SHM Filedeskriptors fehlerhaft");
+        return 1;
+    }
+    else{
+        printf("\nAusblenden des SHM Filedeskriptors erfolgreich");
     }
 
+    //Freigeben des SHM
+    if(shm_unlink(name) == -1){
+        printf("\nFreigeben des SHM fehlerhaft");
+        return 1;
+    }
+    else{
+        printf("\nFreigeben des SHM erfolgreich");
+    }
+    return 0;
 }
+
+
+
