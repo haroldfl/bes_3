@@ -33,14 +33,14 @@ int fct_check_parameter(int argc, char *argv[]){
     return ringbuffer;
 }
 
-void fct_create_name(char *name, int identity){
+void fct_create_name(char *name, int identity, int id_sem){
 
     char shm_name[20];
 
     char shm_basic[40] = "/shm_";
     char sem_basic[40] = "/sem_";
 
-    snprintf(shm_name,20,"%d",CAL_SHM_ID(getuid(),0));
+    snprintf(shm_name,20,"%d",CAL_SHM_ID(getuid(),id_sem));
 
     if(identity==1) {
         strcat(sem_basic, shm_name);
@@ -53,25 +53,39 @@ void fct_create_name(char *name, int identity){
 
 //Funktion checkt ob Semaphore bereits angelegt sind oder ob diese erst angelegt werden müssen.
 
-sem_t *fct_sem_open_create(const char *sem_name, int sem_size){
+sem_t *fct_sem_open_create(const char *sem_name, int sem_size,int sem_type){
 
     sem_t *sem_pointer = NULL;
-
-    sem_pointer = sem_open(sem_name,0);
-    if(sem_pointer == SEM_FAILED){
-        //Erzeugen der Semaphore falls noch nicht vorhanden
-        //name, flags, mode, init value
-        sem_pointer = sem_open(sem_name,O_CREAT|O_EXCL,0700,sem_size);
-        if(sem_pointer == SEM_FAILED){
-            fprintf(stderr,"\n%s: semaphore was not able to open"); //argv mitübergeben für Fehlermeldung?
-            exit(EXIT_FAILURE);
+    if(sem_type==1) {
+        sem_pointer = sem_open(sem_name, 0);
+        if (sem_pointer == SEM_FAILED) {
+            //Erzeugen der Semaphore falls noch nicht vorhanden
+            //name, flags, mode, init value
+            sem_pointer = sem_open(sem_name, O_CREAT | O_EXCL, 0700, sem_size);
+            if (sem_pointer == SEM_FAILED) {
+                fprintf(stderr, "\n%s: semaphore was not able to open"); //argv mitübergeben für Fehlermeldung?
+                exit(EXIT_FAILURE);
+            } else {
+                printf("\nErzeugung Semaphore erfolgreich");
+            }
+        } else {
+            printf("\nSemaphore waren bereits erzeugt");
         }
-        else{
-            printf("\nErzeugung Semaphore erfolgreich");
+    }else if(sem_type==2) {
+        sem_pointer = sem_open(sem_name, 0);
+        if (sem_pointer == SEM_FAILED) {
+            //Erzeugen der Semaphore falls noch nicht vorhanden
+            //name, flags, mode, init value
+            sem_pointer = sem_open(sem_name, O_CREAT | O_EXCL, 0700, 0);
+            if (sem_pointer == SEM_FAILED) {
+                fprintf(stderr, "\n%s: semaphore was not able to open"); //argv mitübergeben für Fehlermeldung?
+                exit(EXIT_FAILURE);
+            } else {
+                printf("\nErzeugung Semaphore erfolgreich");
+            }
+        } else {
+            printf("\nSemaphore waren bereits erzeugt");
         }
-    }
-    else{
-        printf("\nSemaphore waren bereits erzeugt");
     }
     return sem_pointer;
 }
