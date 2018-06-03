@@ -3,19 +3,31 @@
 //
 #include "send_rec.h"
 
-// C File for all functions we are using in sender.c and receiver.c
-int ringbuffer = 0;
+char g_sem_name_empf[40];
+char g_sem_name_send[40];
+char g_shm_name[40];
+sem_t *g_p_sem_send = NULL;
+sem_t *g_p_sem_empf = NULL;
+int g_fd_shm = -2;
+int *g_p_shm = NULL;
 
+// C File for all functions we are using in sender.c and receiver.c
+void fct_close(void){
+    fct_close_unlink_sem(g_sem_name_empf,g_p_sem_empf);
+    fct_close_unlink_sem(g_sem_name_send,g_p_sem_send);
+    fct_close_unlink_shm(g_shm_name,g_fd_shm);
+}
 
 //Parameter werden überprüft und Ringpuffer Größe zurückgegeben.
 
 int fct_check_parameter(int argc, char *argv[]){
+    int g_ringbuffer = -1;
     int opt = 0;
     while((opt = getopt(argc, argv, "m:"))!=-1) {
         switch (opt) {
             case 'm':
                 errno = 0;
-                ringbuffer = strtol(optarg, (char **) NULL, 10);
+                g_ringbuffer = strtol(optarg, (char **) NULL, 10);
                 if (errno) {
                     fprintf(stderr,"\n%s: %s", argv[0], strerror(errno));
                     exit(EXIT_FAILURE);
@@ -26,11 +38,11 @@ int fct_check_parameter(int argc, char *argv[]){
                 exit(EXIT_FAILURE);
         }
     }
-    if(ringbuffer<1){
+    if(g_ringbuffer<1){
         fprintf(stderr,"\n%s: ringbuffer size to short [>0]", argv[0]);
         exit(EXIT_FAILURE);
     }
-    return ringbuffer;
+    return g_ringbuffer;
 }
 
 void fct_create_name(char *name, int identity, int id_sem){
@@ -52,7 +64,7 @@ void fct_create_name(char *name, int identity, int id_sem){
 }
 
 //Funktion checkt ob Semaphore bereits angelegt sind oder ob diese erst angelegt werden müssen.
-
+//Eigentlich ist der einzige Unterschied zwischen Typ 1 und 2 die Größe, bräuchten das if nicht doppelt moppeln
 sem_t *fct_sem_open_create(const char *sem_name, int sem_size,int sem_type){
 
     sem_t *sem_pointer = NULL;
@@ -63,7 +75,7 @@ sem_t *fct_sem_open_create(const char *sem_name, int sem_size,int sem_type){
             //name, flags, mode, init value
             sem_pointer = sem_open(sem_name, O_CREAT | O_EXCL, 0700, sem_size);
             if (sem_pointer == SEM_FAILED) {
-                fprintf(stderr, "\n%s: semaphore was not able to open"); //argv mitübergeben für Fehlermeldung?
+                fprintf(stderr, "\nsemaphore was not able to open"); //argv mitübergeben für Fehlermeldung?
                 exit(EXIT_FAILURE);
             } else {
                 printf("\nErzeugung Semaphore erfolgreich");
@@ -78,7 +90,7 @@ sem_t *fct_sem_open_create(const char *sem_name, int sem_size,int sem_type){
             //name, flags, mode, init value
             sem_pointer = sem_open(sem_name, O_CREAT | O_EXCL, 0700, 0);
             if (sem_pointer == SEM_FAILED) {
-                fprintf(stderr, "\n%s: semaphore was not able to open"); //argv mitübergeben für Fehlermeldung?
+                fprintf(stderr, "\nsemaphore was not able to open"); //argv mitübergeben für Fehlermeldung?
                 exit(EXIT_FAILURE);
             } else {
                 printf("\nErzeugung Semaphore erfolgreich");
@@ -96,7 +108,7 @@ int fct_edit_sem(char option, sem_t *sem_pointer){
         case 'd': //dekrementieren
             //sem_wait return 0 --> Sucess
             if(!sem_wait(sem_pointer)){
-                printf("\nErfolgreich dekrementiert: %p", sem_pointer);
+                printf("\nErfolgreich dekrementiert");
             } else{
                 printf("\nFehler dekrementieren");
                 return 1;
@@ -105,7 +117,7 @@ int fct_edit_sem(char option, sem_t *sem_pointer){
         case 'i': //inkrementieren sem
             //sem_post return 0 --> Sucess
             if(!sem_post(sem_pointer)){
-                printf("\nErfolgreich inkrementiert: %p", sem_pointer);
+                printf("\nErfolgreich inkrementiert");
             } else{
                 printf("\nFehler inkrementieren");
                 return 1;
@@ -150,11 +162,11 @@ int fct_close_unlink_sem(char *name, sem_t *sem_pointer){
 
 
 int fct_create_shared_mem(char* name,int memsize){
-
     int shm_fd=-2;
 //öffnen des Shared Memory Bereichs falls vorhanden
 
-    shm_fd = shm_open(name,O_RDONLY|O_WRONLY,S_IRWXU);
+    //shm_fd = shm_open(name,O_RDONLY|O_WRONLY,S_IRWXU);
+    shm_fd = shm_open(name,O_RDWR,0);
     if(shm_fd == -1){
         //Erzeugen des Shared Memory falls noch nicht vorhanden
         //name, flags, mode, init value
@@ -165,29 +177,35 @@ int fct_create_shared_mem(char* name,int memsize){
         }
         else{
             printf("\nErzeugung Shared Memory erfolgreich");
+            //Größe bestimmen, hierfür muss das SHM schreibend geöffnet werden.
+            if(ftruncate(shm_fd, sizeof(int)*memsize)==-1){
+                printf("\nFehler beim Festlegen der Groesse des SHM");
+            }
+            else{
+                printf("\nGroesse wurde erfolgreich festgelegt");
+            }
         }
     }
     else{
         printf("\nShared Memory war bereits erzeugt");
     }
-
-    //Größe bestimmen, hierfür muss das SHM schreibend geöffnet werden.
-    if(ftruncate(shm_fd, sizeof(int)*memsize)==-1){
-        printf("\nFehler beim Festlegen der Groesse des SHM");
-    }
-    else{
-        printf("\nGroesse wurde erfolgreich festgelegt");
-    }
     return shm_fd;
 }
 
-int *fct_map_shm(int shm_fd, int memsize){
+int *fct_map_shm(int shm_fd, int memsize, int type){
     int *shm_pointer = NULL;
-    shm_pointer = mmap(NULL, (sizeof(int)*memsize), PROT_READ|PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    errno = 0;
+    if(type == SENDERID){
+        shm_pointer = mmap(NULL, (sizeof(int)*memsize), PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    }
+    else if(type == EMPFAENGERID){
+        shm_pointer = mmap(NULL, (sizeof(int)*memsize), PROT_READ, MAP_SHARED, shm_fd, 0);
+    }
     if(shm_pointer == (int *)MAP_FAILED){
-        printf("\nEinblenden des SHM fehlerhaft");
-        printf("\nERRRNO: %s", strerror(errno));
-        return NULL;
+        printf("\nEinblenden des SHM fehlerhaft1");
+        printf("\nERRRNO: %s", strerror(errno)); //strerror(errno));
+        exit(EXIT_FAILURE);
+        //return NULL;
     }
     else{
         printf("\nEinblenden des SHM erfolgreich");
