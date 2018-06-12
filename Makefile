@@ -1,67 +1,107 @@
-CC=gcc
-CFLAGS=-DDEBUG -Wall -Werror -pedantic -Wextra -Wstrict-prototypes -Wformat=2 -fno-common -ftrapv -g -O3 -std=gnu11
-CP=cp
+
+# Makefile - Shared memory
+# Date 11.05.2018
+
+# Define the required macros
+CFLAGS=-Wall -Werror -Wextra -Wstrict-prototypes -Wformat=2 -pedantic -fno-common -ftrapv -O3 -g -std=gnu11
+LDLIBS = -lpthread -lrt
+
+OBJECTS_RECEIVER=receiver.o
+OBJECTS_SENDER=sender.o
+OBJECTS_COMMON=send_rec.o
+HEADER=send_rec.h
+
+#get machines name
+MACHINENAME := $(shell hostname)
+ANNUMINAS=annuminas.technikum-wien.at
+# conditional change of compiler
+CC=$(GCC)
+
+# distingush between the two different machines for the compiler
+ifeq ($(MACHINENAME), $(ANNUMINAS))
+GCC=gcc52
+else
+GCC=gcc
+endif
+
+DOXYGEN=doxygen
 CD=cd
 MV=mv
+RM=rm
 GREP=grep
-DOXYGEN=doxygen
-RM=rm 
-
-OBJECTS=send_rec.c sender.c receiver.c
-OBJECTS_SEND=send_rec.c sender.c
-OBJECTS_REC=send_rec.c receiver.c
-
 EXCLUDE_PATTERN=footrulewidth
-
-##
-## ----------------------------------------------------------------- rules --
-##
+# get the current id from shell
+ID = $(shell id -g)
 
 %.o: %.c
-	$(CC) $(CFLAGS) -c $<
-
-##
-## --------------------------------------------------------------- targets --
-##
+	$(CC) $(CFLAGS)  -c $<
 
 
-all: send_rec sender receiver
+all: receiver sender
 
-# make send_rec to a library
-send_rec: $(OBJECTS)
-	$(CC) -c -Wall -Werror -fpic send_rec.c
-	$(CC) -shared -o libsend_rec.a send_rec.o
+receiver: $(OBJECTS_RECEIVER) $(OBJECTS_COMMON)
+	$(CC) $(CFLAGS) $(OBJECTS_RECEIVER) $(OBJECTS_COMMON) $(HEADER) -o$@ $(LDLIBS)
 
-sender: $(OBJECTS)
-	$(CC) -L. $(CFLAGS) -o sender $(OBJECTS_SEND) -lpthread -lrt -lsend_rec
+sender: $(OBJECTS_SENDER) $(OBJECTS_COMMON)
+	$(CC) $(CFLAGS) $(OBJECTS_SENDER) $(OBJECTS_COMMON) $(HEADER) -o$@ $(LDLIBS)
 
-receiver: $(OBJECTS)
-	$(CC) -L. $(CFLAGS) -o receiver $(OBJECTS_REC) -lpthread -lrt -lsend_rec
+#runs the test on annuminas
+runtest: receiver sender
+	test_sender_empfaenger.sh -s./sender -e./receiver -f 
 
-.PRECIOUS: %.tex
+# Target testsimple
+# TODO: Remove on submission
+testsimple: sender_simple receiver_simple
 
+sender_simple: sender_simple.c
+	$(CC) $< -o$@ $(LDLIBS)
+receiver_simple: receiver_simple.c
+	$(CC) $< -o$@ $(LDLIBS)
+.PHONY: clean
 
 clean:
-	$(RM) *.o *~ myfind
+	rm -f *.o
 
+#delete the semaphores and shared memory from /dev/shm/ with the naming from the description
+deleteResources:
+	rm /dev/shm/sem.sem_$(ID)* /dev/shm/shm_$(ID)*
 
-distclean: myfind
-	$(RM) -r doc
+.PHONY: distclean
 
+distclean: clean
+	$(RM) -rf doc
+
+# create doxy documentation
 doc: html pdf
 
+.PHONY: html
 
+# create html version of documentation
 html:
 	$(DOXYGEN) doxygen.dcf
 
+# create pdf version of documentation
 pdf: html
 	$(CD) doc/pdf && \
-	$(MV) refman.tex refman_save.tex && \
-	$(GREP) -v $(EXCLUDE_PATTERN) refman_save.tex > refman.tex && \
-	$(RM) refman_save.tex && \
-	make && \
-	$(MV) refman.pdf refman.save && \
-	$(RM) *.pdf *.html *.tex *.aux *.sty *.log *.eps *.out *.ind *.idx \
-	      *.ilg *.toc *.tps Makefile && \
+    $(MV) refman.tex refman_save.tex && \
+    $(GREP) -v $(EXCLUDE_PATTERN) refman_save.tex > refman.tex && \
+    $(RM) refman_save.tex && \
+    make && \
+    $(MV) refman.pdf refman.save && \
+    $(RM) *.pdf *.html *.tex *.aux *.sty *.log *.eps *.out *.ind *.idx \
+    *.ilg *.toc *.tps Makefile && \
 	$(MV) refman.save refman.pdf
 
+# Help Target
+help:
+	@echo "The following are some of the valid targets for this Makefile:"
+	@echo "... all (the default if no target is provided)"
+	@echo "... testsimple"
+	@echo "... runtest"
+	@echo "... clean"
+	@echo "... deleteResources"
+	@echo "... distclean"
+	@echo "... doc"
+	@echo "... html"
+	@echo "... pdf"
+.PHONY : help

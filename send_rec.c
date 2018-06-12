@@ -23,24 +23,42 @@ void fct_close(void){
 int fct_check_parameter(int argc, char *argv[]){
     int g_ringbuffer = -1;
     int opt = 0;
-    while((opt = getopt(argc, argv, "m:"))!=-1) {
-        switch (opt) {
+char *error;
+
+
+if(argc<2){
+
+fprintf(stderr,"Usage: %s ", argv[0]);
+                exit(EXIT_FAILURE);
+}    
+
+while((opt = getopt(argc, argv, "m:"))!=-1) {
+    
+	
+	switch (opt) {
             case 'm':
                 errno = 0;
-                g_ringbuffer = strtol(optarg, (char **) NULL, 10);
-                if (errno) {
-                    fprintf(stderr,"\n%s: %s", argv[0], strerror(errno));
+                
+		g_ringbuffer = strtol(optarg, &error, 10);
+                if (errno || *error!='\0' || error==optarg) {
+                fprintf(stderr,"Usage: %s", argv[0]);
                     exit(EXIT_FAILURE);
                 }
                 break;
             default:
-                fprintf(stderr,"\n%s: wrong parameter used", argv[0]);
+                fprintf(stderr,"Usage: %s ", argv[0]);
                 exit(EXIT_FAILURE);
         }
-    }
-    if(g_ringbuffer<1){
-        fprintf(stderr,"\n%s: ringbuffer size to short [>0]", argv[0]);
-        exit(EXIT_FAILURE);
+ 
+}
+if(optind<argc){
+fprintf(stderr,"Usage: %s ", argv[0]);
+                exit(EXIT_FAILURE);
+
+}    
+if(g_ringbuffer<1){
+        fprintf(stderr,"Usage: %s ", argv[0]);
+       exit(EXIT_FAILURE);
     }
     return g_ringbuffer;
 }
@@ -78,10 +96,10 @@ sem_t *fct_sem_open_create(const char *sem_name, int sem_size,int sem_type){
                 fprintf(stderr, "\nsemaphore was not able to open"); //argv mitübergeben für Fehlermeldung?
                 exit(EXIT_FAILURE);
             } else {
-                printf("\nErzeugung Semaphore erfolgreich");
+//                printf("\nErzeugung Semaphore erfolgreich");
             }
         } else {
-            printf("\nSemaphore waren bereits erzeugt");
+  //          printf("\nSemaphore waren bereits erzeugt");
         }
     }else if(sem_type==2) {
         sem_pointer = sem_open(sem_name, 0);
@@ -93,10 +111,10 @@ sem_t *fct_sem_open_create(const char *sem_name, int sem_size,int sem_type){
                 fprintf(stderr, "\nsemaphore was not able to open"); //argv mitübergeben für Fehlermeldung?
                 exit(EXIT_FAILURE);
             } else {
-                printf("\nErzeugung Semaphore erfolgreich");
+//                printf("\nErzeugung Semaphore erfolgreich");
             }
         } else {
-            printf("\nSemaphore waren bereits erzeugt");
+  //          printf("\nSemaphore waren bereits erzeugt");
         }
     }
     return sem_pointer;
@@ -108,32 +126,32 @@ int fct_edit_sem(char option, sem_t *sem_pointer){
         case 'd': //dekrementieren
             //sem_wait return 0 --> Sucess
             if(!sem_wait(sem_pointer)){
-                printf("\nErfolgreich dekrementiert");
+    //            printf("\nErfolgreich dekrementiert");
             } else{
-                printf("\nFehler dekrementieren");
+      //          printf("\nFehler dekrementieren");
                 return 1;
             }
             break;
         case 'i': //inkrementieren sem
             //sem_post return 0 --> Sucess
             if(!sem_post(sem_pointer)){
-                printf("\nErfolgreich inkrementiert");
+        //        printf("\nErfolgreich inkrementiert");
             } else{
-                printf("\nFehler inkrementieren");
+          //      printf("\nFehler inkrementieren");
                 return 1;
             }
             break;
         case 's': //show
             if(sem_getvalue(sem_pointer,&sem_value)==-1){
-                printf("\nFehler Semaphore Wert holen");
+            //    printf("\nFehler Semaphore Wert holen");
                 return 1;
             }
             else{
-                printf("\nAktueller Semaphor Wert = %i",sem_value);
+            //    printf("\nAktueller Semaphor Wert = %i",sem_value);
             }
             break;
         default:
-            printf("\nUngueltige Option wurde uebergeben!");
+           // printf("\nUngueltige Option wurde uebergeben!");
             return 1;
             break;
     }
@@ -144,24 +162,24 @@ int fct_close_unlink_sem(char *name, sem_t *sem_pointer){
 
     //schließen Semaphore
     if(sem_close(sem_pointer)==-1){
-        printf("\nFehler schließen");
+        //printf("\nFehler schließen");
         return 1;
     } else{
-        printf("\nErfolgreich geschlossen");
+       // printf("\nErfolgreich geschlossen");
     }
 
     //freigeben Semaphore
     if(sem_unlink(name)==-1){
-        printf("\nFehler freigeben");
+        //printf("\nFehler freigeben");
         return 1;
     } else{
-        printf("\nErfolgreich freigegeben");
+       // printf("\nErfolgreich freigegeben");
     }
     return 0;
 }
 
 
-int fct_create_shared_mem(char* name,int memsize){
+int fct_create_shared_mem(char* name,int memsize,char* argv[]){
     int shm_fd=-2;
 //öffnen des Shared Memory Bereichs falls vorhanden
 
@@ -172,22 +190,27 @@ int fct_create_shared_mem(char* name,int memsize){
         //name, flags, mode, init value
         shm_fd = shm_open(name,O_CREAT|O_EXCL|O_RDWR,S_IRWXU);
         if(shm_fd == -1){
-            printf("\nFehler Shared Memory open");
+            fprintf(stderr,"Usage: %s", argv[0]);
             exit(EXIT_FAILURE);
         }
         else{
-            printf("\nErzeugung Shared Memory erfolgreich");
+         //   printf("\nErzeugung Shared Memory erfolgreich");
             //Größe bestimmen, hierfür muss das SHM schreibend geöffnet werden.
             if(ftruncate(shm_fd, sizeof(int)*memsize)==-1){
-                printf("\nFehler beim Festlegen der Groesse des SHM");
+                fprintf(stderr,"Usage: %s", argv[0]);
+            exit(EXIT_FAILURE);
             }
             else{
-                printf("\nGroesse wurde erfolgreich festgelegt");
+           //     printf("\nGroesse wurde erfolgreich festgelegt");
             }
         }
     }
     else{
-        printf("\nShared Memory war bereits erzeugt");
+        if(ftruncate(shm_fd, sizeof(int)*memsize)==-1){
+                fprintf(stderr,"Usage: %s", argv[0]);
+            exit(EXIT_FAILURE);
+            }
+
     }
     return shm_fd;
 }
@@ -202,13 +225,13 @@ int *fct_map_shm(int shm_fd, int memsize, int type){
         shm_pointer = mmap(NULL, (sizeof(int)*memsize), PROT_READ, MAP_SHARED, shm_fd, 0);
     }
     if(shm_pointer == (int *)MAP_FAILED){
-        printf("\nEinblenden des SHM fehlerhaft1");
-        printf("\nERRRNO: %s", strerror(errno)); //strerror(errno));
+       // printf("\nEinblenden des SHM fehlerhaft1");
+       // printf("\nERRRNO: %s", strerror(errno)); //strerror(errno));
         exit(EXIT_FAILURE);
         //return NULL;
     }
     else{
-        printf("\nEinblenden des SHM erfolgreich");
+       // printf("\nEinblenden des SHM erfolgreich");
     }
     return shm_pointer;
 }
@@ -216,12 +239,12 @@ int *fct_map_shm(int shm_fd, int memsize, int type){
 int fct_unmap_shm(int *p_shm, int memsize){
     //Ausblenden des Bereiches
     if(munmap(p_shm, (sizeof(int)*memsize)) == -1){
-        printf("\nAusblenden des SHM fehlerhaft");
-        printf("\nERRRNO: %s", strerror(errno));
+       // printf("\nAusblenden des SHM fehlerhaft");
+       // printf("\nERRRNO: %s", strerror(errno));
         return 1;
     }
     else {
-        printf("\nAusblenden des SHM erfolgreich");
+       // printf("\nAusblenden des SHM erfolgreich");
     }
     return 0;
 }
@@ -229,20 +252,20 @@ int fct_unmap_shm(int *p_shm, int memsize){
 int fct_close_unlink_shm (char *name, int shm_fd){
     //Schließen Filedeskriptor
     if(close(shm_fd)==-1){
-        printf("\nSchließen des SHM Filedeskriptors fehlerhaft");
+       // printf("\nSchließen des SHM Filedeskriptors fehlerhaft");
         return 1;
     }
     else{
-        printf("\nAusblenden des SHM Filedeskriptors erfolgreich");
+       // printf("\nAusblenden des SHM Filedeskriptors erfolgreich");
     }
 
     //Freigeben des SHM
     if(shm_unlink(name) == -1){
-        printf("\nFreigeben des SHM fehlerhaft");
+       // printf("\nFreigeben des SHM fehlerhaft");
         return 1;
     }
     else{
-        printf("\nFreigeben des SHM erfolgreich");
+       // printf("\nFreigeben des SHM erfolgreich");
     }
     return 0;
 }
