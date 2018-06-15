@@ -1,6 +1,4 @@
-//
-// Created by ernstl on 16.05.18.
-//
+
 ///
 /// @file send_rec.c
 ///
@@ -40,7 +38,7 @@ void fct_close(void) {
 ///
 /// This function checks every argument
 /// If an argument is wrong the program interrupt with the usage handling
-/// If the arguments are correct the funktion returns the size of the buffer
+/// If the arguments are correct the function returns the size of the buffer
 ///
 /// \param argc number of parameter
 /// \param argv char array of the parameter
@@ -86,9 +84,7 @@ int fct_check_parameter(int argc, char *argv[]) {
 
 /// fct_create_name
 ///
-/// This function checks every argument
-/// If an argument is wrong the program interrupt with the usage handling
-/// If the arguments are correct the funktion returns the size of the buffer
+/// This function creates the names for the shared memory and the Semaphors. 
 ///
 /// \param *name pointer where the name should be written
 /// \param identity 1..semaphore | 2..shared memory
@@ -99,13 +95,15 @@ void fct_create_name(char *name, int identity, int id_sem) {
     char shm_name[20];
     char shm_basic[40] = "/shm_";
     char sem_basic[40] = "/sem_";
-
+    //get user id, calculate it with the makro CAL_SHM_ID and put it in an string array
     snprintf(shm_name, 20, "%d", CAL_SHM_ID(getuid(), id_sem));
-
+    //check if the name should be for a semaphore, or a shared memory
     if (identity == 1) {
+        //append the calculated value in the string shm_name to sem_basic
         strcat(sem_basic, shm_name);
         strcpy(name, sem_basic);
     } else if (identity == 2) {
+        //append the calculated value in the string shm_name to shm_basic
         strcat(shm_basic, shm_name);
         strcpy(name, shm_basic);
     }
@@ -124,17 +122,21 @@ void fct_create_name(char *name, int identity, int id_sem) {
 sem_t *fct_sem_open_create(const char *sem_name, int sem_size, int sem_type) {
     sem_t *sem_pointer = NULL;
 
+    //check if semaphore with sem_name already exist	
     sem_pointer = sem_open(sem_name, 0);
+    //if not create one
     if (sem_pointer == SEM_FAILED) {
-        //Erzeugen der Semaphore falls noch nicht vorhanden
-        //name, flags, mode, init value
+        //check if the semaphore that should be created is for sender or receiver
         if (sem_type == SENDERID) {
+            //create semaphore for the sender
             sem_pointer = sem_open(sem_name, O_CREAT | O_EXCL, 0700, sem_size);
         } else if (sem_type == EMPFAENGERID) {
-            sem_pointer = sem_open(sem_name, O_CREAT | O_EXCL, 0700, 0);
+            //create semaphore for receiver
+	    sem_pointer = sem_open(sem_name, O_CREAT | O_EXCL, 0700, 0);
         }
+	    //if the sem_open fails, write an error message
         if (sem_pointer == SEM_FAILED) {
-            fprintf(stderr, "\nsemaphore was not able to open"); //argv mitübergeben für Fehlermeldung?
+            fprintf(stderr, "\nsemaphore was not able to open"); 
             exit(EXIT_FAILURE);
         }
     }
@@ -150,11 +152,11 @@ sem_t *fct_sem_open_create(const char *sem_name, int sem_size, int sem_type) {
 /// \return 0: success 1:error
 
 int fct_close_unlink_sem(char *name, sem_t *sem_pointer) {
-    //schließen Semaphore
+    //close semaphore
     if (sem_close(sem_pointer) == -1) {
         return 1;
     }
-    //freigeben Semaphore
+    //free semaphore
     if (sem_unlink(name) == -1) {
         return 1;
     }
@@ -172,24 +174,28 @@ int fct_close_unlink_sem(char *name, sem_t *sem_pointer) {
 
 int fct_create_shared_mem(char *name, int memsize, char *argv[]) {
     int shm_fd = -2;
-    //öffnen des Shared Memory Bereichs falls vorhanden
-    //shm_fd = shm_open(name,O_RDONLY|O_WRONLY,S_IRWXU);
+    //try to open shared memory if already created
     shm_fd = shm_open(name, O_RDWR, 0);
+    //if not create one 
     if (shm_fd == -1) {
-        //Erzeugen des Shared Memory falls noch nicht vorhanden
-        //name, flags, mode, init value
+
+        //Try to create a shared memory
         shm_fd = shm_open(name, O_CREAT | O_EXCL | O_RDWR, S_IRWXU);
         if (shm_fd == -1) {
             fprintf(stderr, "Usage: %s", argv[0]);
             exit(EXIT_FAILURE);
         } else {
-            //Größe bestimmen, hierfür muss das SHM schreibend geöffnet werden.
+            //Set the size of shared memory via the command ftruncate and check if the size is valid
             if (ftruncate(shm_fd, sizeof(int) * memsize) == -1) {
                 fprintf(stderr, "Usage: %s", argv[0]);
                 exit(EXIT_FAILURE);
             }
         }
-    } else {
+    }
+    //Shared Memory already exists 
+    else {
+	
+	    //check if it has a valid size
         if (ftruncate(shm_fd, sizeof(int) * memsize) == -1) {
             fprintf(stderr, "Usage: %s", argv[0]);
             exit(EXIT_FAILURE);
@@ -211,10 +217,13 @@ int *fct_map_shm(int shm_fd, int memsize, int type) {
     int *shm_pointer = NULL;
 
     if (type == SENDERID) {
+        //fade in the shared memory for the sender with write permissions
         shm_pointer = mmap(NULL, (sizeof(int) * memsize), PROT_WRITE, MAP_SHARED, shm_fd, 0);
     } else if (type == EMPFAENGERID) {
+        //fade in the shared memory for the receiver with read permissions
         shm_pointer = mmap(NULL, (sizeof(int) * memsize), PROT_READ, MAP_SHARED, shm_fd, 0);
     }
+    //check if the mapping was correct
     if (shm_pointer == (int *) MAP_FAILED) {
         exit(EXIT_FAILURE);
     }
@@ -230,7 +239,7 @@ int *fct_map_shm(int shm_fd, int memsize, int type) {
 /// \return 0: success 1: error
 
 int fct_unmap_shm(int *p_shm, int memsize) {
-    //Ausblenden des Bereiches
+    //fade out the shared memory
     if (munmap(p_shm, (sizeof(int) * memsize)) == -1) {
         return 1;
     }
@@ -246,12 +255,12 @@ int fct_unmap_shm(int *p_shm, int memsize) {
 /// \return 0: success 1: error
 
 int fct_close_unlink_shm(char *name, int shm_fd) {
-    //Schließen Filedeskriptor
+    //close the filedescriptor
     if (close(shm_fd) == -1) {
         return 1;
     }
 
-    //Freigeben des SHM
+    //free the shared memory
     if (shm_unlink(name) == -1) {
         return 1;
     }

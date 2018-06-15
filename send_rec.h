@@ -22,7 +22,7 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
-//Für Shared Memory
+
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <unistd.h>
