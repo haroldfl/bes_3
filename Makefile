@@ -1,28 +1,16 @@
-
-# Makefile - Shared memory
-# Date 11.05.2018
-
-# Define the required macros
+##
+## @file Makefile
+## Betriebssysteme sender/empfänger Makefile
+## Beispiel 3
+##
+## @author ibrahim Milli <ic17b063@technikum-wien.at>
+## @author Dominic Ernstbrunner <ic17b015@technikum-wien.at>
+## @author Florian Harold <ic17b093@technikum-wien.at>
+os
+CC=gcc52
 CFLAGS=-Wall -Werror -Wextra -Wstrict-prototypes -Wformat=2 -pedantic -fno-common -ftrapv -O3 -g -std=gnu11
-LDLIBS = -lpthread -lrt
+LIBS = -lpthread -lrt
 
-OBJECTS_RECEIVER=receiver.o
-OBJECTS_SENDER=sender.o
-OBJECTS_COMMON=send_rec.o
-HEADER=send_rec.h
-
-#get machines name
-MACHINENAME := $(shell hostname)
-ANNUMINAS=annuminas.technikum-wien.at
-# conditional change of compiler
-CC=$(GCC)
-
-# distingush between the two different machines for the compiler
-ifeq ($(MACHINENAME), $(ANNUMINAS))
-GCC=gcc52
-else
-GCC=gcc
-endif
 
 DOXYGEN=doxygen
 CD=cd
@@ -30,8 +18,12 @@ MV=mv
 RM=rm
 GREP=grep
 EXCLUDE_PATTERN=footrulewidth
-# get the current id from shell
-ID = $(shell id -g)
+
+
+OBJECTS_1=receiver.o
+OBJECTS_2=sender.o
+OBJECTS_3=send_rec.o
+HEADER=send_rec.h
 
 %.o: %.c
 	$(CC) $(CFLAGS)  -c $<
@@ -39,69 +31,42 @@ ID = $(shell id -g)
 
 all: receiver sender
 
-receiver: $(OBJECTS_RECEIVER) $(OBJECTS_COMMON)
-	$(CC) $(CFLAGS) $(OBJECTS_RECEIVER) $(OBJECTS_COMMON) $(HEADER) -o$@ $(LDLIBS)
+receiver: $(OBJECTS_1) $(OBJECTS_3)
+	$(CC) $(CFLAGS) $(OBJECTS_1) $(OBJECTS_3) $(HEADER) -o$@ $(LIBS)
 
-sender: $(OBJECTS_SENDER) $(OBJECTS_COMMON)
-	$(CC) $(CFLAGS) $(OBJECTS_SENDER) $(OBJECTS_COMMON) $(HEADER) -o$@ $(LDLIBS)
+sender: $(OBJECTS_2) $(OBJECTS_3)
+	$(CC) $(CFLAGS) $(OBJECTS_2) $(OBJECTS_3) $(HEADER) -o$@ $(LIBS)
 
-#runs the test on annuminas
-runtest: receiver sender
-	test_sender_empfaenger.sh -s./sender -e./receiver -f 
 
-# Target testsimple
-# TODO: Remove on submission
-testsimple: sender_simple receiver_simple
-
-sender_simple: sender_simple.c
-	$(CC) $< -o$@ $(LDLIBS)
-receiver_simple: receiver_simple.c
-	$(CC) $< -o$@ $(LDLIBS)
 .PHONY: clean
 
-clean:
-	rm -f *.o
+clean: 
+	$(RM) -f *.o
+	$(RM) sender
+	$(RM) receiver
 
-#delete the semaphores and shared memory from /dev/shm/ with the naming from the description
-deleteResources:
-	rm /dev/shm/sem.sem_$(ID)* /dev/shm/shm_$(ID)*
+
 
 .PHONY: distclean
 
 distclean: clean
 	$(RM) -rf doc
 
-# create doxy documentation
 doc: html pdf
 
 .PHONY: html
 
-# create html version of documentation
 html:
 	$(DOXYGEN) doxygen.dcf
 
-# create pdf version of documentation
 pdf: html
 	$(CD) doc/pdf && \
-    $(MV) refman.tex refman_save.tex && \
-    $(GREP) -v $(EXCLUDE_PATTERN) refman_save.tex > refman.tex && \
-    $(RM) refman_save.tex && \
-    make && \
-    $(MV) refman.pdf refman.save && \
-    $(RM) *.pdf *.html *.tex *.aux *.sty *.log *.eps *.out *.ind *.idx \
-    *.ilg *.toc *.tps Makefile && \
+	$(MV) refman.tex refman_save.tex && \
+	$(GREP) -v $(EXCLUDE_PATTERN) refman_save.tex > refman.tex && \
+	$(RM) refman_save.tex && \
+	make && \
+	$(MV) refman.pdf refman.save && \
+	$(RM) *.pdf *.html *.tex *.aux *.sty *.log *.eps *.out *.ind *.idx \
+	*.ilg *.toc *.tps Makefile && \
 	$(MV) refman.save refman.pdf
 
-# Help Target
-help:
-	@echo "The following are some of the valid targets for this Makefile:"
-	@echo "... all (the default if no target is provided)"
-	@echo "... testsimple"
-	@echo "... runtest"
-	@echo "... clean"
-	@echo "... deleteResources"
-	@echo "... distclean"
-	@echo "... doc"
-	@echo "... html"
-	@echo "... pdf"
-.PHONY : help
