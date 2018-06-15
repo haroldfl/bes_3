@@ -41,9 +41,7 @@ sender: $(OBJECTS_2) $(OBJECTS_3)
 .PHONY: clean
 
 clean: 
-	$(RM) -f *.o
-	$(RM) sender
-	$(RM) receiver
+	$(RM) -f *.o sender receiver
 
 
 
